@@ -1,18 +1,4 @@
 #!/bin/bash
-#
-# --- Self-Healing CRLF Check ---
-# If this file was ever saved/edited on Windows, it may have picked up CRLF
-# line endings. That would normally break the shebang itself
-# ("#!/bin/bash\r" -> "bad interpreter: No such file or directory") before a
-# single line of this script executes. If we got far enough to run this line,
-# we're fine for THIS run — but re-save a clean LF copy now so any future
-# invocation (e.g. RunPod re-downloading and re-running this same file) can't
-# hit that failure. This is defensive and a no-op if the file is already LF.
-if grep -q $'\r' "$0" 2>/dev/null; then
-    echo "Detected CRLF line endings in $0 - normalizing to LF..."
-    sed -i 's/\r$//' "$0"
-fi
-
 set -e  # Exit immediately if a command exits with a non-zero status
 
 # --- Error Handling Trap ---
@@ -105,11 +91,7 @@ echo "Fetching workflow and script files from GitHub..."
 wget --tries=5 --retry-connrefused -q "https://raw.githubusercontent.com/asaf2019/script_test/main/workflow.json" -O workflows/workflow.json
 wget --tries=5 --retry-connrefused -q "https://raw.githubusercontent.com/asaf2019/script_test/main/run_workflow_api.py" -O run_workflow_api.py
 
-# Strip any Windows-style CRLF line endings that may have been introduced
-# when the files were saved/edited on Windows before being pushed to GitHub.
-# Without this, a CRLF shebang (e.g. "#!/bin/bash\r") makes the interpreter
-# unresolvable ("bad interpreter: No such file or directory") the moment
-# something tries to execute the file.
+# Strip Windows CRLF line endings from fetched repo files
 sed -i 's/\r$//' workflows/workflow.json
 sed -i 's/\r$//' run_workflow_api.py
 
@@ -120,10 +102,6 @@ if [ -n "$HF_TOKEN" ]; then
     AUTH_HEADER="--header=Authorization: Bearer $HF_TOKEN"
 fi
 
-# Downloads to a .part file and only renames to the final name on success.
-# This means a half-finished download (crash, network drop, disk full, rate
-# limit) never leaves behind a file with the "real" name, so a rerun will
-# correctly resume/retry instead of silently treating a corrupt file as done.
 download_model () {
     URL=$1
     OUTPUT=$2
@@ -156,8 +134,6 @@ download_model \
 "models/latent_upscale_models/ltx-2.3-spatial-upscaler-x2-1.1.safetensors"
 
 # --- 9. Launch Auto-Trigger Background Worker ---
-# Redirect output to a log file so failures/output aren't lost or interleaved
-# with the main ComfyUI server logs.
 python run_workflow_api.py >> /workspace/run_workflow_api.log 2>&1 &
 
 # --- 10. Start ComfyUI Server ---
