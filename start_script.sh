@@ -4,6 +4,14 @@ set -e  # Exit immediately if a command exits with a non-zero status
 # --- Configuration ---
 cd /workspace
 
+# --- 0. Network & DNS Readiness Check ---
+echo "Verifying network connectivity..."
+until getent hosts raw.githubusercontent.com &>/dev/null; do
+    echo "Waiting for DNS and network to initialize..."
+    sleep 2
+done
+echo "Network connection established!"
+
 # --- 1. System Setup & ComfyUI Clone ---
 if [ ! -d "ComfyUI" ]; then
     echo "Cloning ComfyUI..."
@@ -69,14 +77,14 @@ fi
 
 cd ..
 
-# --- 6. Download GitHub Repo Files (With Fail-Safes) ---
+# --- 6. Download GitHub Repo Files (With Fail-Safes & Retries) ---
 echo "Fetching workflow and script files from GitHub..."
-wget -q "https://raw.githubusercontent.com/asaf2019/script_test/main/workflow.json" -O workflows/workflow.json || {
+wget --tries=5 --retry-connrefused -q "https://raw.githubusercontent.com/asaf2019/script_test/main/workflow.json" -O workflows/workflow.json || {
     echo "ERROR: Failed to download workflow.json from GitHub!"
     exit 1
 }
 
-wget -q "https://raw.githubusercontent.com/asaf2019/script_test/main/run_workflow_api.py" -O run_workflow_api.py || {
+wget --tries=5 --retry-connrefused -q "https://raw.githubusercontent.com/asaf2019/script_test/main/run_workflow_api.py" -O run_workflow_api.py || {
     echo "ERROR: Failed to download run_workflow_api.py from GitHub!"
     exit 1
 }
@@ -95,7 +103,7 @@ download_model () {
         echo "Already exists: $OUTPUT"
     else
         echo "Downloading: $OUTPUT"
-        wget $AUTH_HEADER "$URL" -O "$OUTPUT" || {
+        wget --tries=5 --retry-connrefused $AUTH_HEADER "$URL" -O "$OUTPUT" || {
             echo "ERROR: Failed to download model from $URL"
             exit 1
         }
